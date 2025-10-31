@@ -1,0 +1,24 @@
+{
+  "server": {
+    "port": ":9092",
+    "host": "localhost"
+  },
+  "app": {
+    "name": "FitGo TCX Processor",
+    "version": "1.0.0"
+  },
+  "coros": {
+    "username": 15659295082,
+    "password": "e2b811ee9c51e3342c1e68a98c51b95a",
+    "address": "https://teamcnapi.coros.com"
+  },
+  "ai":  {
+    "provider": "qwen",
+    "config": {
+      "base_url": "http://10.10.40.102:32730/openapi/b1d0a38f-91c7-4fb4-9746-fd6e5347f302",
+      "api_key": "tnJNhUUeOyzCvoi-CFvHKcks-QDEEqTPuWEkoAilMNw",
+      "model": "qwen_v3_moe_235b_2507",
+      "timeout": 30
+    }
+  }
+}

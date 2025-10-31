@@ -25,7 +25,9 @@ go.work
 # StarFactory files
 *.starFactory
 .starFactory/
+./web/node_modules
 
 # OS specific files
 .DS_Store
 Thumbs.db
+/cmd/web/node_modules/
