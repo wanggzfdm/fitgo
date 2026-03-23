@@ -8,10 +8,11 @@ import (
 
 // Config represents the application configuration
 type Config struct {
-	Server ServerConfig `json:"server"`
-	App    AppConfig    `json:"app"`
-	Coros  CorosConfig  `json:"coros"`
-	AI     AIConfig     `json:"ai"`
+	Server   ServerConfig   `json:"server"`
+	App      AppConfig      `json:"app"`
+	Coros    CorosConfig    `json:"coros"`
+	AI       AIConfig       `json:"ai"`
+	PushPlus PushPlusConfig `json:"pushplus"`
 }
 
 // ServerConfig represents the server configuration
@@ -40,6 +41,16 @@ type AIConfig struct {
 		Model   string `json:"model"`    // 模型名称
 		Timeout int    `json:"timeout"`  // 超时时间(秒)
 	} `json:"config"`
+}
+
+type PushPlusConfig struct {
+	Enabled         bool   `json:"enabled"`
+	Token           string `json:"token"`
+	Topic           string `json:"topic"`
+	Template        string `json:"template"`
+	Retry           int    `json:"retry"`
+	RetryIntervalMs int    `json:"retry_interval_ms"`
+	Timeout         int    `json:"timeout"`
 }
 
 // LoadConfig loads the configuration from a JSON file

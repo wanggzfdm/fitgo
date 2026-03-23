@@ -2,18 +2,21 @@ package handler
 
 import (
 	"encoding/json"
-	"fitgo/internal/service/tcx"
 	"fmt"
 	"net/http"
+
+	apptcx "fitgo/internal/application/tcx"
 )
 
 type TCXHandler struct {
-	tcxService tcx.TCXService
+	commandService *apptcx.CommandService
+	queryService   *apptcx.QueryService
 }
 
-func NewTCXHandler(service tcx.TCXService) *TCXHandler {
+func NewTCXHandler(commandService *apptcx.CommandService, queryService *apptcx.QueryService) *TCXHandler {
 	return &TCXHandler{
-		tcxService: service,
+		commandService: commandService,
+		queryService:   queryService,
 	}
 }
 
@@ -56,7 +59,7 @@ func (h *TCXHandler) UploadTCX(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 调用服务处理文件
-	summary, err := h.tcxService.UploadTCX(file, header.Filename)
+	summary, err := h.commandService.UploadTCX(r.Context(), file, header.Filename)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to process TCX file: %v", err), http.StatusInternalServerError)
 		return
@@ -80,7 +83,7 @@ func (h *TCXHandler) GetTCXSummary(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	summary, err := h.tcxService.GetTCXSummary(id)
+	summary, err := h.queryService.GetTCXSummary(r.Context(), id)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to get TCX summary: %v", err), http.StatusNotFound)
 		return
@@ -91,7 +94,7 @@ func (h *TCXHandler) GetTCXSummary(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *TCXHandler) ListTCXSummaries(w http.ResponseWriter, r *http.Request) {
-	summaries, err := h.tcxService.ListTCXSummaries()
+	summaries, err := h.queryService.ListTCXSummaries(r.Context())
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to list TCX summaries: %v", err), http.StatusInternalServerError)
 		return

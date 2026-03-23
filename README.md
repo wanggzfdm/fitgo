@@ -4,55 +4,48 @@
 
 ```
 .
-├── go.mod
-├── go.sum
 ├── cmd/
-│   ├── app/               # 后端服务入口
+│   ├── app/                   # 后端服务入口
 │   │   └── main.go
-│   └── web/               # 前端项目目录
-│       └── fitgo-web/     # Vue.js 前端项目
-│           ├── public/    # 静态资源
-│           ├── src/       # 源代码
-│           │   ├── assets/     # 资源文件
-│           │   ├── components/ # Vue 组件
-│           │   ├── router/     # 路由配置
-│           │   ├── App.vue     # 根组件
-│           │   └── main.js     # 入口文件
-│           └── package.json    # 前端依赖
+│   └── web/                   # 前端项目目录
+│       └── fitgo-web/         # Vue.js 前端项目
 ├── configs/
-│   └── config.json        # 配置文件
+│   └── config.json            # 配置文件
 ├── internal/
-│   ├── handler/           # HTTP 处理器
-│   │   ├── tcx.go
-│   │   └── coros.go
-│   └── service/           # 业务逻辑
-│       ├── tcx/           # TCX 相关服务
-│       └── coros/         # COROS 相关服务
+│   ├── application/           # 应用层（CQRS 用例）
+│   │   ├── analysis/
+│   │   ├── coros/
+│   │   ├── tcx/
+│   │   └── port/              # 外部依赖端口定义
+│   ├── domain/                # 领域层（实体/值对象/仓储接口）
+│   │   ├── coros/
+│   │   └── tcx/
+│   ├── infrastructure/        # 基础设施层（外部系统实现）
+│   │   ├── ai/
+│   │   ├── analysis/
+│   │   ├── coros/
+│   │   └── tcx/
+│   ├── handler/               # 接口层（HTTP 处理器）
+│   ├── middleware/            # 中间件
+│   └── service/               # 现有服务实现（逐步迁移中）
 ├── pkg/
-│   └── config/            # 配置处理
-│       └── config.go
-├── router/                # 路由定义
-│   └── router.go
-└── tests/                 # 测试文件
+│   └── config/                # 配置处理
+├── router/                    # 路由定义
+└── tests/                     # 测试文件
 ```
 
 ## 目录说明
 
-- **go.mod**: Go 模块定义文件
-- **main.go**: 程序入口文件（示例）
 - **cmd/**: 应用程序入口点
-  - `app/main.go`: Web 服务入口点
+  - `cmd/app/main.go`: Web 服务入口点（依赖注入与 wiring）
 - **configs/**: 配置文件
-  - `config.json`: 应用程序配置文件
-- **internal/**: 私有应用程序和库代码
-  - `handler/tcx.go`: TCX HTTP 请求处理器
-  - `service/tcx/`: TCX 业务逻辑服务
-    - `api.go`: TCX 接口定义和数据结构
-    - `service.go`: TCX 服务实现
-- **pkg/**: 可供外部使用的库代码
-  - `config/config.go`: 配置处理包
+- **internal/application/**: 应用层（命令/查询用例）
+- **internal/domain/**: 领域层（实体、值对象、仓储接口）
+- **internal/infrastructure/**: 基础设施层（外部 API、存储、AI 分析实现）
+- **internal/handler/**: 接口层（HTTP handler，参数校验与响应组装）
+- **internal/service/**: 既有服务实现（迁移中，逐步归并到基础设施层）
+- **pkg/config/**: 配置处理包
 - **router/**: 路由配置
-- **scripts/**: 脚本文件
 - **tests/**: 测试文件
 
 ## 功能概述
@@ -164,6 +157,15 @@ GET /coros/sports/summary?labelId={labelId}&sportType={sportType}
 ```
 GET /coros/ai/summary?labelId={labelId}&sportType={sportType}
 ```
+
+#### 获取最新运动的 AI 分析报告
+
+```
+GET /coros/ai/latest
+```
+
+**可选参数:**
+- `format`: 输出格式 html|md|raw（默认 html）
 
 ## 开发指南
 

@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"testing"
 
-	"fitgo/internal/service/ai/client"
-	aiservice "fitgo/internal/service/ai/service"
-	"fitgo/internal/service/analyzer/running"
+	"fitgo/internal/infrastructure/ai/client"
+	aiservice "fitgo/internal/infrastructure/ai/service"
+	"fitgo/internal/infrastructure/analysis/running"
 	"fitgo/pkg/config"
 )
 

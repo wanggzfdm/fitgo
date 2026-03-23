@@ -20,5 +20,14 @@
       "model": "qwen_v3_moe_235b_2507",
       "timeout": 30
     }
+  },
+  "pushplus": {
+    "enabled": true,
+    "token": "f9e81aadb53d4f6fbd4bbb55f655e11d",
+    "topic": "",
+    "template": "markdown",
+    "retry": 0,
+    "retry_interval_ms": 1000,
+    "timeout": 10
   }
 }
