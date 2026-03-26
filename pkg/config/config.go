@@ -6,40 +6,34 @@ import (
 	"os"
 )
 
-// Config represents the application configuration
+// Config represents the standalone MCP service configuration.
 type Config struct {
-	Server ServerConfig `json:"server"`
-	App    AppConfig    `json:"app"`
-	Coros  CorosConfig  `json:"coros"`
-	AI     AIConfig     `json:"ai"`
-}
-
-// ServerConfig represents the server configuration
-type ServerConfig struct {
-	Port string `json:"port"`
-	Host string `json:"host"`
-}
-
-// AppConfig represents the application configuration
-type AppConfig struct {
-	Name    string `json:"name"`
-	Version string `json:"version"`
+	Coros CorosConfig `json:"coros"`
 }
 
 // CorosConfig represents the Coros service configuration
 type CorosConfig struct {
-	Username int    `json:"username"`
-	Password string `json:"password"`
-	Address  string `json:"address"`
+	Account     string `json:"account"`
+	Username    string `json:"username"`
+	AccountType int    `json:"accountType"`
+	Password    string `json:"password"`
+	P1          string `json:"p1"`
+	P2          string `json:"p2"`
+	Address     string `json:"address"`
 }
-type AIConfig struct {
-	Provider string `json:"provider"` // 提供者，如 "qwen"
-	Config   struct {
-		BaseURL string `json:"base_url"` // API 基础地址
-		APIKey  string `json:"api_key"`  // API 密钥
-		Model   string `json:"model"`    // 模型名称
-		Timeout int    `json:"timeout"`  // 超时时间(秒)
-	} `json:"config"`
+
+func (c CorosConfig) LoginAccount() string {
+	if c.Account != "" {
+		return c.Account
+	}
+	return c.Username
+}
+
+func (c CorosConfig) LoginAccountType() int {
+	if c.AccountType != 0 {
+		return c.AccountType
+	}
+	return 2
 }
 
 // LoadConfig loads the configuration from a JSON file
@@ -77,7 +71,10 @@ func LoadConfigWithDefaults(primaryPath, fallbackPath string) (*Config, error) {
 	return nil, fmt.Errorf("failed to load config from both %s and %s: %w", primaryPath, fallbackPath, err)
 }
 
-// LoadDefaultConfig loads the configuration using default paths
+// LoadDefaultConfig loads the configuration using default paths.
 func LoadDefaultConfig() (*Config, error) {
+	if override := os.Getenv("COROS_CONFIG_PATH"); override != "" {
+		return LoadConfig(override)
+	}
 	return LoadConfigWithDefaults("configs/config.json", "../../configs/config.json")
 }

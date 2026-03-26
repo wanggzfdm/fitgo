@@ -1,280 +1,336 @@
-# FitGo Project
+# coros-fit-mcp
 
-## 目录结构
+一个独立的 MCP 服务，当前聚焦两类能力：
 
-```
+- 从高驰账号读取运动摘要与个人训练指标
+- 读取本地 `.fit` 文件，并转换成统一运动摘要
+
+## 当前结构
+
+```text
 .
-├── go.mod
-├── go.sum
-├── cmd/
-│   ├── app/               # 后端服务入口
-│   │   └── main.go
-│   └── web/               # 前端项目目录
-│       └── fitgo-web/     # Vue.js 前端项目
-│           ├── public/    # 静态资源
-│           ├── src/       # 源代码
-│           │   ├── assets/     # 资源文件
-│           │   ├── components/ # Vue 组件
-│           │   ├── router/     # 路由配置
-│           │   ├── App.vue     # 根组件
-│           │   └── main.js     # 入口文件
-│           └── package.json    # 前端依赖
-├── configs/
-│   └── config.json        # 配置文件
-├── internal/
-│   ├── handler/           # HTTP 处理器
-│   │   ├── tcx.go
-│   │   └── coros.go
-│   └── service/           # 业务逻辑
-│       ├── tcx/           # TCX 相关服务
-│       └── coros/         # COROS 相关服务
-├── pkg/
-│   └── config/            # 配置处理
-│       └── config.go
-├── router/                # 路由定义
-│   └── router.go
-└── tests/                 # 测试文件
+├── cmd/mcp/                          # MCP stdio 服务入口
+├── configs/config.json               # 高驰账号配置
+├── internal/service/coros/           # 高驰 API 客户端
+├── internal/service/activitysummary/ # 摘要模型、格式化、COROS/FIT 转换
+├── internal/service/personalmetrics/ # 个人指标提取与格式化
+└── pkg/config/                       # 配置加载
 ```
 
-## 目录说明
+## 配置
 
-- **go.mod**: Go 模块定义文件
-- **main.go**: 程序入口文件（示例）
-- **cmd/**: 应用程序入口点
-  - `app/main.go`: Web 服务入口点
-- **configs/**: 配置文件
-  - `config.json`: 应用程序配置文件
-- **internal/**: 私有应用程序和库代码
-  - `handler/tcx.go`: TCX HTTP 请求处理器
-  - `service/tcx/`: TCX 业务逻辑服务
-    - `api.go`: TCX 接口定义和数据结构
-    - `service.go`: TCX 服务实现
-- **pkg/**: 可供外部使用的库代码
-  - `config/config.go`: 配置处理包
-- **router/**: 路由配置
-- **scripts/**: 脚本文件
-- **tests/**: 测试文件
-
-## 功能概述
-
-FitGo 是一个综合性的运动数据分析平台，提供 TCX 文件处理和 COROS 运动数据同步功能，并配有现代化的 Web 界面。
-
-### 主要功能
-
-#### 1. TCX 文件处理
-- **TCXService**: 核心服务接口，定义了处理 TCX 文件的方法
-- **UploadTCX**: 上传并处理 TCX 文件
-- **GetTCXSummary**: 获取特定 TCX 文件摘要
-- **ListTCXSummaries**: 列出所有 TCX 文件摘要
-
-#### 2. COROS 运动数据同步
-- 同步 COROS 运动记录
-- 获取详细运动数据
-- AI 运动数据分析
-
-#### 3. Web 界面
-- 响应式设计，适配各种设备
-- 运动记录列表展示
-- 详细数据分析报告
-- 交互式数据可视化
-
-### 数据结构
-
-- **TCXSummary**: 表示 TCX 文件的摘要信息，包括运动时间、距离、卡路里等
-
-## 快速开始
-
-### 1. 后端服务
-
-#### 配置
-
-编辑 `configs/config.json` 配置文件：
+`configs/config.json` 只需要保留高驰配置。
+仓库里另外提供了一个脱敏样例 `configs/config.example.json`：
 
 ```json
 {
-  "server": {
-    "port": ":9092",
-    "host": "localhost"
-  },
-  "app": {
-    "name": "FitGo",
-    "version": "1.0.0"
-  },
-  "cors": {
-    "allowed_origins": ["http://localhost:9093"],
-    "allowed_methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    "allowed_headers": ["Content-Type", "Authorization"]
+  "coros": {
+    "account": "you@example.com",
+    "accountType": 2,
+    "p1": "$2b$10$exampleexampleexampleexampleexampleexampleexample",
+    "p2": "$2b$10$exampleexampleexample",
+    "address": "https://teamapi.coros.com"
   }
 }
 ```
 
-#### 启动后端服务
+当前登录优先使用新版字段：
+
+- `account`
+- `accountType`
+- `p1`
+- `p2`
+
+如果你手里还是旧凭证，也兼容：
+
+- `username`
+- `password`
+
+## 运行
+
+开发时直接启动 stdio MCP 服务：
 
 ```bash
-# 进入项目目录
-cd /Library/MyFile/go/fitgo
-
-# 启动后端服务
-go run cmd/app/main.go
+go run ./cmd/mcp
 ```
 
-### 2. 前端开发
-
-#### 环境要求
-- Node.js 14+
-- npm 或 yarn
-
-#### 启动开发服务器
+如果要构建：
 
 ```bash
-# 进入前端项目目录
-cd cmd/web/fitgo-web
-
-# 安装依赖
-npm install
-
-# 启动开发服务器
-npm run serve
+go build ./cmd/mcp
 ```
 
-开发服务器将在 http://localhost:9093 运行，并自动代理 API 请求到后端服务。
+高驰登录 token 会优先走进程内缓存，并落到本机用户缓存目录，避免每次启动都重新登录。进程内 token 过期后，会先尝试读取本地缓存；本地缓存也过期了，才重新登录。
 
-## API 文档
-
-### 运动记录
-
-#### 获取运动记录列表
-
-```
-GET /coros/active?size=10&pageNumber=1
-```
-
-**参数:**
-- `size`: 每页记录数
-- `pageNumber`: 页码
-
-#### 获取运动详情
-
-```
-GET /coros/sports/summary?labelId={labelId}&sportType={sportType}
-```
-
-#### 获取 AI 分析报告
-
-```
-GET /coros/ai/summary?labelId={labelId}&sportType={sportType}
-```
-
-## 开发指南
-
-### 前端开发
-
-前端项目使用 Vue 3 和 Naive UI 构建，主要特性：
-
-- 使用 Composition API
-- 响应式布局
-- 现代化的 UI 组件
-- 支持 Markdown 渲染
-
-### 后端开发
-
-后端使用 Go 语言开发，主要特性：
-
-- 模块化设计
-- 中间件支持（CORS、日志等）
-- 清晰的目录结构
-- 配置管理
-
-## 部署
-
-### 构建前端
+远程调试可以启动 HTTP 入口，同时支持 SSE 和 Streamable HTTP：
 
 ```bash
-cd cmd/web/fitgo-web
-npm run build
+go run ./cmd/mcp-sse
 ```
 
-构建后的文件将生成在 `dist` 目录下。
-
-### 部署后端
+默认监听 `:9093`，默认基址 `http://127.0.0.1:9093`。
+可通过环境变量覆盖：
 
 ```bash
-# 构建可执行文件
-go build -o fitgo cmd/app/main.go
-
-# 运行
-./fitgo
+MCP_SSE_ADDR=:9090 MCP_BASE_URL=http://127.0.0.1:9090 go run ./cmd/mcp-sse
 ```
 
-## 贡献指南
+启动后可用的远程端点是：
 
-欢迎提交 Issue 和 Pull Request。在提交代码前，请确保：
+- `GET /sse`
+- `POST /message?sessionId=...`
+- `POST /mcp`
+- `GET /healthz`
 
-1. 代码符合 Go 代码规范
-2. 添加必要的测试
-3. 更新相关文档
+其中：
 
-## 许可证
+- 旧版 SSE 客户端继续用 `http://host:port/sse`
+- 支持 Streamable HTTP 的客户端用 `http://host:port/mcp`
 
-MIT
+## MCP Tools
 
-## 通用配置加载
+### `get_runner_profile`
 
-项目提供了一个通用的配置加载包 `pkg/config`，包含以下功能：
+无参数。返回高驰个人基础训练资料，包括：
 
-- `LoadConfig(filepath string)`: 从指定路径加载配置
-- `LoadConfigWithDefaults(primaryPath, fallbackPath string)`: 从主路径或备选路径加载配置
-- `LoadDefaultConfig()`: 使用默认路径加载配置（推荐使用）
+- 身高、体重、生日、性别、国家
+- 最大心率、静息心率
+- 乳酸阈心率、乳酸阈配速
 
-### 使用示例
+### `get_training_zones`
 
-```go
-// 简单使用默认配置加载
-cfg, err := config.LoadDefaultConfig()
-if err != nil {
-    log.Fatalf("Failed to load config: %v", err)
+无参数。返回高驰当前训练分区，包括：
+
+- 心率区间
+- 配速区间
+- 配速格式化文本，例如 `5'07"/km`
+
+### `get_training_dashboard`
+
+无参数。返回高驰训练看板核心指标，包括：
+
+- 跑步能力与分项能力
+- 恢复状态
+- 睡眠 HRV
+- 个人纪录
+
+### `get_training_load_status`
+
+无参数。返回训练负荷状态，包括：
+
+- 短期负荷 `ATI`
+- 长期负荷 `CTI`
+- 负荷比与百分比
+- 疲劳状态
+- 未来几天推荐训练负荷
+
+### `get_recent_activities`
+
+参数：
+
+```json
+{
+  "limit": 5
 }
-
-// 使用配置
-port := cfg.Server.Port
 ```
 
-## API 服务
+`limit` 可选。返回最近运动列表，包括日期、距离、时长、平均配速、平均心率、平均功率、训练负荷等字段。
 
-项目包含一个基于 HTTP 的 API 服务，可以通过以下端点访问：
+### `get_weekly_summary`
 
-- `GET /` - API 根路径，返回服务信息
-- `POST /upload` - 上传 TCX 文件
-- `GET /summary/{id}` - 获取特定 TCX 文件摘要
-- `GET /summaries` - 列出所有 TCX 文件摘要
+无参数。返回本周训练汇总，包括：
 
-### 启动 API 服务
+- 总距离
+- 总时长
+- 总训练负荷
+
+### `get_training_trends`
+
+参数：
+
+```json
+{
+  "days": 7
+}
+```
+
+`days` 可选。返回最近多日训练趋势，包括训练负荷、ATI、CTI、VO2 Max、跑步能力、阈值配速等变化。
+
+### `get_latest_coros_activity_summary`
+
+无参数。读取高驰账号最新一条活动，并返回统一摘要 JSON，结果里同时带结构化字段和一段 Markdown 摘要。
+
+### `get_coros_daily_running_summaries`
+
+参数：
+
+```json
+{
+  "date": "2026-03-26"
+}
+```
+
+`date` 可选，格式为 `YYYY-MM-DD`；未传时默认使用北京时间当天。返回当日跑步汇总和每次跑步摘要。
+
+### `summarize_fit_file`
+
+参数：
+
+```json
+{
+  "path": "/absolute/or/relative/path/to/file.fit"
+}
+```
+
+读取本地 `.fit` 文件并返回统一摘要 JSON。
+
+## 返回格式
+
+新的个人指标工具统一返回：
+
+- `data`：结构化 JSON 数据
+- `markdown`：简短 Markdown 文本，方便 MCP 客户端直接展示
+
+出于安全考虑，不会返回以下敏感字段：
+
+- `accessToken`
+- `email`
+- `userId`
+- `nickname`
+
+## MCP 客户端配置示例
+
+### Claude Desktop
+
+如果你希望 Claude Desktop 以 stdio 方式拉起本服务，可以在 Claude Desktop 的 MCP 配置里加入：
+
+把下面的 `/path/to/coros-fit-mcp` 替换成你的本地仓库路径。
+
+```json
+{
+  "mcpServers": {
+    "coros-fit-mcp": {
+      "command": "go",
+      "args": [
+        "run",
+        "/path/to/coros-fit-mcp/cmd/mcp"
+      ]
+    }
+  }
+}
+```
+
+如果你已经构建过二进制，也可以改成：
+
+```json
+{
+  "mcpServers": {
+    "coros-fit-mcp": {
+      "command": "/path/to/coros-fit-mcp/mcp"
+    }
+  }
+}
+```
+
+常见调用示例：
+
+- 获取跑者资料：`get_runner_profile`
+- 获取训练区间：`get_training_zones`
+- 获取训练看板：`get_training_dashboard`
+- 获取训练负荷：`get_training_load_status`
+- 获取最近活动：`get_recent_activities`，参数 `{"limit": 5}`
+- 获取本周汇总：`get_weekly_summary`
+- 获取训练趋势：`get_training_trends`，参数 `{"days": 7}`
+
+### Cherry Studio
+
+Cherry Studio 可以直接接 stdio 或远程 HTTP。
+
+#### 方式一：stdio
+
+可执行命令填写：
 
 ```bash
-cd cmd/app
-go run main.go
+go run /path/to/coros-fit-mcp/cmd/mcp
 ```
 
-服务将根据配置文件中的设置启动。
-
-### 使用 API
-
-#### 上传 TCX 文件
+如果使用已构建的二进制：
 
 ```bash
-curl -X POST -F "file=@example.tcx" http://localhost:8080/upload
+/path/to/coros-fit-mcp/mcp
 ```
 
-## 项目入口文件说明
+#### 方式二：远程 HTTP / SSE
 
-项目包含两个不同的入口文件：
+先启动服务：
 
-1. **根目录下的 main.go**: 这是一个简单的示例程序，展示了如何使用 TCX 服务的基本用法。
+```bash
+go run ./cmd/mcp-sse
+```
 
-2. **cmd/app/main.go**: 这是完整的 Web 服务应用程序，提供 HTTP API 接口用于处理 TCX 文件。
+然后在 Cherry Studio 中按客户端支持方式填写：
 
-根据你的需求，可以选择运行其中任何一个入口文件：
-- 运行示例程序: `go run main.go`
-- 运行 Web 服务: `cd cmd/app && go run main.go`
+- SSE 地址：`http://127.0.0.1:9093/sse`
+- Streamable HTTP 地址：`http://127.0.0.1:9093/mcp`
 
-这是一个标准的 Go 项目布局，为构建结构良好的应用程序提供了良好基础。
+常见调用示例：
+
+```json
+{}
+```
+
+适用于：
+
+- `get_runner_profile`
+- `get_training_zones`
+- `get_training_dashboard`
+- `get_training_load_status`
+- `get_weekly_summary`
+
+```json
+{
+  "limit": 5
+}
+```
+
+适用于：
+
+- `get_recent_activities`
+
+```json
+{
+  "days": 7
+}
+```
+
+适用于：
+
+- `get_training_trends`
+
+```json
+{
+  "date": "2026-03-26"
+}
+```
+
+适用于：
+
+- `get_coros_daily_running_summaries`
+
+```json
+{
+  "path": "/absolute/or/relative/path/to/file.fit"
+}
+```
+
+适用于：
+
+- `summarize_fit_file`
+
+## 验证
+
+```bash
+go test ./...
+go build ./cmd/mcp
+go build ./cmd/mcp-sse
+```

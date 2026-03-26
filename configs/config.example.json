@@ -1,0 +1,9 @@
+{
+  "coros": {
+    "account": "you@example.com",
+    "accountType": 2,
+    "p1": "$2b$10$exampleexampleexampleexampleexampleexampleexample",
+    "p2": "$2b$10$exampleexampleexample",
+    "address": "https://teamapi.coros.com"
+  }
+}

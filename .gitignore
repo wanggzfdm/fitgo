@@ -31,3 +31,4 @@ go.work
 .DS_Store
 Thumbs.db
 /cmd/web/node_modules/
+/mcp
