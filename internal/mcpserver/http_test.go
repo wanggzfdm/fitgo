@@ -76,13 +76,12 @@ func TestServerRegistersPersonalMetricsTools(t *testing.T) {
 	}
 
 	for _, name := range []string{
-		"get_runner_profile",
-		"get_training_zones",
-		"get_training_dashboard",
-		"get_training_load_status",
-		"get_recent_activities",
-		"get_weekly_summary",
-		"get_training_trends",
+		"analyze_training_status",
+		"get_training_profile",
+		"get_training_context",
+		"get_latest_coros_activity_summary",
+		"get_coros_daily_running_summaries",
+		"summarize_fit_file",
 	} {
 		if !names[name] {
 			t.Fatalf("expected tool %s to be registered", name)

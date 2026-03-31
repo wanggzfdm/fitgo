@@ -168,6 +168,23 @@ type Response struct {
 	Data     interface{} `json:"data"`
 }
 
+type TrainingProfileBundle struct {
+	RunnerProfile     *RunnerProfile     `json:"runner_profile,omitempty"`
+	TrainingZones     *TrainingZones     `json:"training_zones,omitempty"`
+	TrainingDashboard *TrainingDashboard `json:"training_dashboard,omitempty"`
+	Available         []string           `json:"available,omitempty"`
+	Errors            map[string]string  `json:"errors,omitempty"`
+}
+
+type TrainingContextBundle struct {
+	TrainingLoadStatus *TrainingLoadStatus `json:"training_load_status,omitempty"`
+	RecentActivities   []RecentActivity    `json:"recent_activities,omitempty"`
+	WeeklySummary      *WeeklySummary      `json:"weekly_summary,omitempty"`
+	TrainingTrends     []TrainingTrend     `json:"training_trends,omitempty"`
+	Available          []string            `json:"available,omitempty"`
+	Errors             map[string]string   `json:"errors,omitempty"`
+}
+
 func GetRunnerProfile(service coros.CorosService) (*RunnerProfile, error) {
 	data, err := service.AccountQuery()
 	if err != nil {
@@ -362,6 +379,87 @@ func GetTrainingTrends(service coros.CorosService, days int) ([]TrainingTrend, e
 	}
 
 	return trends, nil
+}
+
+func GetTrainingProfileBundle(service coros.CorosService) (*TrainingProfileBundle, error) {
+	bundle := &TrainingProfileBundle{
+		Available: make([]string, 0, 3),
+		Errors:    map[string]string{},
+	}
+
+	if profile, err := GetRunnerProfile(service); err == nil {
+		bundle.RunnerProfile = profile
+		bundle.Available = append(bundle.Available, "runner_profile")
+	} else {
+		bundle.Errors["runner_profile"] = err.Error()
+	}
+
+	if zones, err := GetTrainingZones(service); err == nil {
+		bundle.TrainingZones = zones
+		bundle.Available = append(bundle.Available, "training_zones")
+	} else {
+		bundle.Errors["training_zones"] = err.Error()
+	}
+
+	if dashboard, err := GetTrainingDashboard(service); err == nil {
+		bundle.TrainingDashboard = dashboard
+		bundle.Available = append(bundle.Available, "training_dashboard")
+	} else {
+		bundle.Errors["training_dashboard"] = err.Error()
+	}
+
+	if len(bundle.Available) == 0 {
+		return nil, fmt.Errorf("无法获取训练档案数据")
+	}
+	if len(bundle.Errors) == 0 {
+		bundle.Errors = nil
+	}
+
+	return bundle, nil
+}
+
+func GetTrainingContextBundle(service coros.CorosService, recentLimit, trendDays int) (*TrainingContextBundle, error) {
+	bundle := &TrainingContextBundle{
+		Available: make([]string, 0, 4),
+		Errors:    map[string]string{},
+	}
+
+	if status, err := GetTrainingLoadStatus(service); err == nil {
+		bundle.TrainingLoadStatus = status
+		bundle.Available = append(bundle.Available, "training_load_status")
+	} else {
+		bundle.Errors["training_load_status"] = err.Error()
+	}
+
+	if activities, err := GetRecentActivities(service, recentLimit); err == nil {
+		bundle.RecentActivities = activities
+		bundle.Available = append(bundle.Available, "recent_activities")
+	} else {
+		bundle.Errors["recent_activities"] = err.Error()
+	}
+
+	if weekly, err := GetWeeklySummary(service); err == nil {
+		bundle.WeeklySummary = weekly
+		bundle.Available = append(bundle.Available, "weekly_summary")
+	} else {
+		bundle.Errors["weekly_summary"] = err.Error()
+	}
+
+	if trends, err := GetTrainingTrends(service, trendDays); err == nil {
+		bundle.TrainingTrends = trends
+		bundle.Available = append(bundle.Available, "training_trends")
+	} else {
+		bundle.Errors["training_trends"] = err.Error()
+	}
+
+	if len(bundle.Available) == 0 {
+		return nil, fmt.Errorf("无法获取训练状态数据")
+	}
+	if len(bundle.Errors) == 0 {
+		bundle.Errors = nil
+	}
+
+	return bundle, nil
 }
 
 func ResponseText(title string, data interface{}) (string, error) {

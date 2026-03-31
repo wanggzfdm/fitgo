@@ -5,6 +5,7 @@ type CorosService interface {
 	Login() (string, error)
 	SportsSummary(labelId, sportType string) (*SportsSummaryResult, error)
 	ActivityList(size, pageNumber, modeList int) (map[string]interface{}, error)
+	ActivityListByModeList(size, pageNumber int, modeList string) (map[string]interface{}, error)
 	AccountQuery() (*AccountQueryData, error)
 	DashboardQuery() (*DashboardQueryData, error)
 	DashboardDetailQuery() (*DashboardDetailQueryData, error)

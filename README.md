@@ -89,72 +89,54 @@ MCP_SSE_ADDR=:9090 MCP_BASE_URL=http://127.0.0.1:9090 go run ./cmd/mcp-sse
 
 ## MCP Tools
 
-### `get_runner_profile`
-
-无参数。返回高驰个人基础训练资料，包括：
-
-- 身高、体重、生日、性别、国家
-- 最大心率、静息心率
-- 乳酸阈心率、乳酸阈配速
-
-### `get_training_zones`
-
-无参数。返回高驰当前训练分区，包括：
-
-- 心率区间
-- 配速区间
-- 配速格式化文本，例如 `5'07"/km`
-
-### `get_training_dashboard`
-
-无参数。返回高驰训练看板核心指标，包括：
-
-- 跑步能力与分项能力
-- 恢复状态
-- 睡眠 HRV
-- 个人纪录
-
-### `get_training_load_status`
-
-无参数。返回训练负荷状态，包括：
-
-- 短期负荷 `ATI`
-- 长期负荷 `CTI`
-- 负荷比与百分比
-- 疲劳状态
-- 未来几天推荐训练负荷
-
-### `get_recent_activities`
+### `analyze_training_status`
 
 参数：
 
 ```json
 {
-  "limit": 5
+  "date": "2026-03-25"
 }
 ```
 
-`limit` 可选。返回最近运动列表，包括日期、距离、时长、平均配速、平均心率、平均功率、训练负荷等字段。
+`date` 可选。用于分析当前或指定日期的训练状态，并输出：
 
-### `get_weekly_summary`
+- 当前恢复、疲劳、负荷平衡、训练准备度
+- 焦点训练属于恢复跑 / 有氧跑 / 阈值跑 / 间歇跑哪一类
+- 明天训练建议
+- 后续 3 天训练计划
 
-无参数。返回本周训练汇总，包括：
+不传 `date` 时默认分析当前状态和最新活动。
 
-- 总距离
-- 总时长
-- 总训练负荷
+### `get_training_profile`
 
-### `get_training_trends`
+无参数。聚合返回适合分析长期训练能力的资料，包括：
+
+- 跑者基础资料
+- 训练分区
+- 训练看板
+
+如果部分接口不可用，结果里会保留已获取的数据，并在 `errors` 中说明失败项。
+
+### `get_training_context`
 
 参数：
 
 ```json
 {
+  "recent_limit": 5,
   "days": 7
 }
 ```
 
-`days` 可选。返回最近多日训练趋势，包括训练负荷、ATI、CTI、VO2 Max、跑步能力、阈值配速等变化。
+聚合返回适合分析近期训练状态的数据，包括：
+
+- 训练负荷状态
+- 最近活动列表
+- 本周训练汇总
+- 多日训练趋势
+
+`recent_limit` 和 `days` 都可选；如果部分接口不可用，结果里会保留已获取的数据，并在 `errors` 中说明失败项。
 
 ### `get_latest_coros_activity_summary`
 
@@ -170,7 +152,86 @@ MCP_SSE_ADDR=:9090 MCP_BASE_URL=http://127.0.0.1:9090 go run ./cmd/mcp-sse
 }
 ```
 
-`date` 可选，格式为 `YYYY-MM-DD`；未传时默认使用北京时间当天。返回当日跑步汇总和每次跑步摘要。
+`date` 可选，格式为 `YYYY-MM-DD`；未传时默认使用北京时间当天。仅筛选户外跑步 `100` 和运动场跑步 `103`，返回当日跑步汇总和每次跑步摘要。
+
+### `get_coros_daily_trail_running_summaries`
+
+参数：
+
+```json
+{
+  "date": "2026-03-26"
+}
+```
+
+`date` 可选，格式为 `YYYY-MM-DD`；未传时默认使用北京时间当天。仅筛选越野跑 `102`，返回当日越野跑汇总和每次越野跑摘要。
+
+示例输出：
+
+```json
+{
+  "date": "2026-03-28",
+  "timezone": "Asia/Shanghai",
+  "activity_count": 1,
+  "daily_summary": {
+    "summary": {
+      "source": "coros",
+      "source_name": "coros_daily_trail_running_summaries",
+      "name": "2026-03-28 越野跑汇总",
+      "sport_type": "越野跑",
+      "start_time": "2026-03-28T10:45:06+08:00",
+      "end_time": "2026-03-28T15:33:44+08:00",
+      "duration_seconds": 17318,
+      "moving_seconds": 17317,
+      "distance_meters": 28084.6,
+      "ascent_meters": 2037,
+      "descent_meters": 2013,
+      "elevation_gain_per_km": 72.5,
+      "vertical_ascent_per_hour": 423.5,
+      "time_per_100m_ascent_seconds": 850.1,
+      "moving_ratio": 1,
+      "average_heart_rate": 160,
+      "max_heart_rate": 178,
+      "average_power": 170,
+      "average_moving_pace_sec_per_km": 616.6,
+      "training_load": 896,
+      "highlights": [
+        "完成 28.08 km，移动时间 4:48:37，累计爬升 2037 m。",
+        "爬升效率 424 m/h。",
+        "单位距离爬升 72 m/km。",
+        "平均心率 160 bpm，最高 178 bpm。",
+        "训练负荷 896。"
+      ]
+    },
+    "markdown": "# 2026-03-28 越野跑汇总\n- 类型：越野跑\n- 开始时间：2026-03-28T10:45:06+08:00\n\n📍 越野概况\n- 距离：28.08 km\n- 总时间：4:48:38\n- 移动时间：4:48:37\n- 累计爬升：2037 m\n- 累计下降：2013 m\n- 单位距离爬升：72 m/km\n\n⛰️ 地形与效率\n- 爬升效率：424 m/h\n- 每爬升 100m 用时：850 s\n- 移动占比：100%\n- 平均移动配速：10:17 /km\n- 最快配速：5:26 /km\n\n❤️ 强度与负荷\n- 平均心率：160 bpm\n- 最大心率：178 bpm\n- 平均功率：170 W\n- 训练负荷：896\n- 消耗热量：3166 kcal\n\n👣 动作数据\n- 步频：136 spm\n- 步幅：0.74 m\n- 总步数：38172"
+  },
+  "activities": [
+    {
+      "summary": {
+        "source": "coros",
+        "source_name": "coros_latest_activity",
+        "activity_id": "476387922021482797",
+        "name": "福州市 越野跑",
+        "sport_type": "越野跑",
+        "start_time": "2026-03-28T10:45:06+08:00",
+        "end_time": "2026-03-28T15:33:44+08:00",
+        "distance_meters": 28084.6,
+        "ascent_meters": 2037,
+        "descent_meters": 2013,
+        "elevation_gain_per_km": 72.5,
+        "vertical_ascent_per_hour": 423.5,
+        "average_heart_rate": 160,
+        "max_heart_rate": 178,
+        "average_moving_pace_sec_per_km": 616.6,
+        "training_load": 896
+      },
+      "markdown": "# 福州市 越野跑\n- 类型：越野跑\n- 开始时间：2026-03-28T10:45:06+08:00\n\n📍 越野概况\n- 距离：28.08 km\n- 总时间：4:48:38\n- 移动时间：4:48:37\n- 累计爬升：2037 m\n- 累计下降：2013 m\n- 单位距离爬升：72 m/km\n\n⛰️ 地形与效率\n- 爬升效率：424 m/h\n- 每爬升 100m 用时：850 s\n- 移动占比：100%\n- 平均移动配速：10:17 /km\n- 最快配速：5:26 /km\n\n❤️ 强度与负荷\n- 平均心率：160 bpm\n- 最大心率：178 bpm\n- 平均功率：170 W\n- 训练负荷：896\n- 消耗热量：3166 kcal\n\n👣 动作数据\n- 步频：136 spm\n- 步幅：0.74 m\n- 总步数：38172"
+    }
+  ]
+}
+```
+
+这类摘要会优先突出越野跑真正重要的信息：总时间、移动时间、累计爬升、爬升密度、爬升效率、移动占比，以及强度与负荷，而不是沿用公路跑那套以平均配速为中心的展示方式。
 
 ### `summarize_fit_file`
 
@@ -186,7 +247,7 @@ MCP_SSE_ADDR=:9090 MCP_BASE_URL=http://127.0.0.1:9090 go run ./cmd/mcp-sse
 
 ## 返回格式
 
-新的个人指标工具统一返回：
+新的聚合分析工具统一返回：
 
 - `data`：结构化 JSON 数据
 - `markdown`：简短 Markdown 文本，方便 MCP 客户端直接展示
@@ -234,13 +295,9 @@ MCP_SSE_ADDR=:9090 MCP_BASE_URL=http://127.0.0.1:9090 go run ./cmd/mcp-sse
 
 常见调用示例：
 
-- 获取跑者资料：`get_runner_profile`
-- 获取训练区间：`get_training_zones`
-- 获取训练看板：`get_training_dashboard`
-- 获取训练负荷：`get_training_load_status`
-- 获取最近活动：`get_recent_activities`，参数 `{"limit": 5}`
-- 获取本周汇总：`get_weekly_summary`
-- 获取训练趋势：`get_training_trends`，参数 `{"days": 7}`
+- 分析训练状态：`analyze_training_status`，参数 `{"date": "2026-03-25"}`
+- 获取训练档案：`get_training_profile`
+- 获取近期训练状态：`get_training_context`，参数 `{"recent_limit": 5, "days": 7}`
 
 ### Cherry Studio
 
@@ -281,31 +338,28 @@ go run ./cmd/mcp-sse
 
 适用于：
 
-- `get_runner_profile`
-- `get_training_zones`
-- `get_training_dashboard`
-- `get_training_load_status`
-- `get_weekly_summary`
+- `analyze_training_status`
 
 ```json
 {
-  "limit": 5
+  "date": "2026-03-25"
 }
 ```
 
 适用于：
 
-- `get_recent_activities`
+- `analyze_training_status`
 
 ```json
 {
+  "recent_limit": 5,
   "days": 7
 }
 ```
 
 适用于：
 
-- `get_training_trends`
+- `get_training_context`
 
 ```json
 {

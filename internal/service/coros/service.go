@@ -6,11 +6,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -58,7 +59,11 @@ type corosService struct {
 
 var sharedCorosService = &corosService{}
 
-const defaultRunningModeList = 100
+const (
+	defaultRunningModeList = "100,103"
+	allRunningModeList     = "100,101,102,103"
+	trailRunningModeList   = "102"
+)
 const tokenTTL = 7 * 24 * time.Hour
 
 type tokenCache struct {
@@ -82,17 +87,25 @@ func (e *corosRequestFailure) Error() string {
 }
 
 func (s *corosService) ActivityList(size, pageNumber, modeList int) (map[string]interface{}, error) {
+	modeListStr := ""
+	if modeList > 0 {
+		modeListStr = strconv.Itoa(modeList)
+	}
+	return s.ActivityListByModeList(size, pageNumber, modeListStr)
+}
+
+func (s *corosService) ActivityListByModeList(size, pageNumber int, modeList string) (map[string]interface{}, error) {
 	// 获取配置文件
 	cfg, err := config.LoadDefaultConfig()
 	if err != nil {
 		return nil, fmt.Errorf("加载配置失败: %v", err)
 	}
 
-	if modeList == 0 {
+	if strings.TrimSpace(modeList) == "" {
 		modeList = defaultRunningModeList
 	}
 
-	urlStr := fmt.Sprintf("%s/activity/query?size=%d&pageNumber=%d&modeList=%d",
+	urlStr := fmt.Sprintf("%s/activity/query?size=%d&pageNumber=%d&modeList=%s",
 		cfg.Coros.Address, size, pageNumber, modeList)
 
 	bodyBytes, err := s.doAuthenticatedRequest("GET", urlStr, nil)
@@ -173,8 +186,6 @@ func (s *corosService) login(forceRefresh bool) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("JSON序列化失败: %w", err)
 	}
-	logCOROSRequest("POST", loginUrl, jsonData)
-
 	// 创建 HTTP 请求
 	req, err := http.NewRequest("POST", loginUrl, bytes.NewBuffer(jsonData))
 	if err != nil {
@@ -199,8 +210,6 @@ func (s *corosService) login(forceRefresh bool) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("读取响应失败: %w", err)
 	}
-	logCOROSResponse("POST", loginUrl, body)
-
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return "", fmt.Errorf("登录失败: HTTP %d: %s", resp.StatusCode, string(body))
 	}
@@ -457,7 +466,7 @@ func (s *corosService) doAuthenticatedRequest(method, urlStr string, payload int
 
 	var lastResult string
 	var lastMsg string
-	for idx, attempt := range attempts {
+	for _, attempt := range attempts {
 		body, err := s.doAuthenticatedRequestWithToken(method, urlStr, payload, attempt.forceRefresh)
 		if err != nil {
 			return nil, err
@@ -465,15 +474,11 @@ func (s *corosService) doAuthenticatedRequest(method, urlStr string, payload int
 
 		ok, result, msg := parseCOROSStatus(body)
 		if ok {
-			if idx > 0 {
-				log.Printf("[coros] recovered request method=%s url=%s attempt=%s", method, urlStr, attempt.label)
-			}
 			return body, nil
 		}
 
 		lastResult = result
 		lastMsg = msg
-		log.Printf("[coros] request failed method=%s url=%s attempt=%s result=%s message=%s", method, urlStr, attempt.label, result, msg)
 
 		if !isTokenInvalid(result, msg) {
 			return nil, &corosRequestFailure{Result: result, Msg: msg}
@@ -495,25 +500,18 @@ func (s *corosService) doAuthenticatedRequestWithToken(method, urlStr string, pa
 
 func doCOROSJSONRequest(method, urlStr string, payload interface{}, token string) ([]byte, error) {
 	var requestBody io.Reader
-	var requestBytes []byte
 	if payload != nil {
 		data, err := json.Marshal(payload)
 		if err != nil {
 			return nil, fmt.Errorf("JSON序列化失败: %w", err)
 		}
-		requestBytes = data
 		requestBody = bytes.NewBuffer(data)
 	}
 
-	logCOROSRequest(method, urlStr, requestBytes)
 	return doCOROSRequest(method, urlStr, requestBody, token)
 }
 
 func doCOROSRequest(method, urlStr string, body io.Reader, token string) ([]byte, error) {
-	if body == nil {
-		logCOROSRequest(method, urlStr, nil)
-	}
-
 	req, err := http.NewRequest(method, urlStr, body)
 	if err != nil {
 		return nil, fmt.Errorf("创建请求失败: %w", err)
@@ -539,29 +537,12 @@ func doCOROSRequest(method, urlStr string, body io.Reader, token string) ([]byte
 	if err != nil {
 		return nil, fmt.Errorf("读取响应失败: %w", err)
 	}
-	logCOROSResponse(method, urlStr, responseBody)
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, fmt.Errorf("请求失败: HTTP %d: %s", resp.StatusCode, string(responseBody))
 	}
 
 	return responseBody, nil
-}
-
-func logCOROSRequest(method, urlStr string, body []byte) {
-	if len(body) == 0 {
-		log.Printf("[coros] request method=%s url=%s body=<empty>", method, urlStr)
-		return
-	}
-	log.Printf("[coros] request method=%s url=%s body=%s", method, urlStr, string(body))
-}
-
-func logCOROSResponse(method, urlStr string, body []byte) {
-	if len(body) == 0 {
-		log.Printf("[coros] response method=%s url=%s body=<empty>", method, urlStr)
-		return
-	}
-	log.Printf("[coros] response method=%s url=%s body=%s", method, urlStr, string(body))
 }
 
 func parseCOROSStatus(body []byte) (bool, string, string) {

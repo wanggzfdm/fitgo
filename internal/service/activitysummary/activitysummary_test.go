@@ -1,6 +1,7 @@
 package activitysummary
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -32,6 +33,12 @@ func (s *stubCorosService) SportsSummary(labelId, sportType string) (*coros.Spor
 	return s.detail, nil
 }
 func (s *stubCorosService) ActivityList(size, pageNumber, modeList int) (map[string]interface{}, error) {
+	if s.pages != nil {
+		return s.pages[pageNumber], nil
+	}
+	return s.list, nil
+}
+func (s *stubCorosService) ActivityListByModeList(size, pageNumber int, modeList string) (map[string]interface{}, error) {
 	if s.pages != nil {
 		return s.pages[pageNumber], nil
 	}
@@ -289,5 +296,55 @@ func TestSummarizeCorosDailyActivities(t *testing.T) {
 	}
 	if response.Activities[0].Summary.Name != "热身跑" || response.Activities[1].Summary.Name != "强度跑" {
 		t.Fatalf("expected activities sorted by start time, got %#v", response.Activities)
+	}
+}
+
+func TestTrailSummaryFormatting(t *testing.T) {
+	summary := ActivitySummary{
+		Source:                    "coros",
+		SourceName:                "coros_latest_activity",
+		Name:                      "山径长距离",
+		SportType:                 "越野跑",
+		StartTime:                 "2026-03-28T10:45:06+08:00",
+		DurationSeconds:           ptr(17318.0),
+		MovingSeconds:             ptr(17317.0),
+		DistanceMeters:            ptr(28084.6),
+		AscentMeters:              ptr(2037.0),
+		DescentMeters:             ptr(2013.0),
+		AverageHeartRate:          ptr(160.0),
+		MaxHeartRate:              ptr(178.0),
+		AveragePower:              ptr(170.0),
+		AverageCadence:            ptr(136.0),
+		AverageStrideLengthMeters: ptr(0.74),
+		AverageMovingPaceSecPerKM: ptr(616.6),
+		BestPaceSecPerKM:          ptr(326.0),
+		TrainingLoad:              ptr(896.0),
+		Calories:                  ptr(3165.7),
+		StepCount:                 ptr(38172.0),
+	}
+	enrichTerrainMetrics(&summary)
+
+	response := ToResponse(summary)
+
+	if response.Summary.ElevationGainPerKM == nil || *response.Summary.ElevationGainPerKM < 72 || *response.Summary.ElevationGainPerKM > 73 {
+		t.Fatalf("expected elevation gain per km around 72.5, got %#v", response.Summary.ElevationGainPerKM)
+	}
+	if response.Summary.VerticalAscentPerHour == nil || *response.Summary.VerticalAscentPerHour < 423 || *response.Summary.VerticalAscentPerHour > 424 {
+		t.Fatalf("expected vertical ascent per hour around 423.5, got %#v", response.Summary.VerticalAscentPerHour)
+	}
+	if !strings.Contains(response.Markdown, "📍 越野概况") {
+		t.Fatalf("expected trail markdown section, got %s", response.Markdown)
+	}
+	if !strings.Contains(response.Markdown, "- 累计爬升：2037 m") {
+		t.Fatalf("expected ascent in markdown, got %s", response.Markdown)
+	}
+	if !strings.Contains(response.Markdown, "- 爬升效率：424 m/h") {
+		t.Fatalf("expected vertical ascent efficiency in markdown, got %s", response.Markdown)
+	}
+	if len(response.Summary.Highlights) == 0 || !strings.Contains(response.Summary.Highlights[0], "累计爬升 2037 m") {
+		t.Fatalf("expected trail highlight to include ascent, got %#v", response.Summary.Highlights)
+	}
+	if strings.Contains(response.Markdown, "📍 基本信息") {
+		t.Fatalf("expected trail summary to avoid road template, got %s", response.Markdown)
 	}
 }

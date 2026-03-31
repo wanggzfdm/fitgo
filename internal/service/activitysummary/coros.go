@@ -14,32 +14,27 @@ import (
 
 var nonAlphaNum = regexp.MustCompile(`[^a-z0-9]+`)
 
+const (
+	runningModeList      = "100,103"
+	allRunningModes      = "100,101,102,103"
+	trailRunningModeList = "102"
+)
+
 type corosDateWindow struct {
 	targetDate string
 	location   *time.Location
 }
 
 func SummarizeLatestCorosActivity(service coros.CorosService) (*ActivitySummary, error) {
-	list, err := service.ActivityList(1, 1, 100)
+	items, err := loadLatestActivitiesByModes(service, splitModeList(allRunningModes))
 	if err != nil {
-		return nil, fmt.Errorf("获取高驰活动列表失败: %w", err)
+		return nil, err
 	}
-
-	data, ok := list["data"].(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("高驰活动列表缺少 data 字段")
-	}
-
-	items, ok := data["dataList"].([]interface{})
-	if !ok || len(items) == 0 {
+	if len(items) == 0 {
 		return nil, fmt.Errorf("没有可用的高驰活动记录")
 	}
 
-	latest, ok := items[0].(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("最新活动记录格式异常")
-	}
-
+	latest := items[0]
 	labelID := valueAsString(findAnyValue(latest, "labelId", "id"))
 	sportType := valueAsString(findAnyValue(latest, "sportType", "mode"))
 	if labelID == "" || sportType == "" {
@@ -56,12 +51,20 @@ func SummarizeLatestCorosActivity(service coros.CorosService) (*ActivitySummary,
 }
 
 func SummarizeCorosDailyActivities(service coros.CorosService, date string) (*DailySummaryResponse, error) {
+	return summarizeCorosDailyActivitiesByModes(service, date, runningModeList, "跑步", "coros_daily_running_summaries")
+}
+
+func SummarizeCorosDailyTrailRunningActivities(service coros.CorosService, date string) (*DailySummaryResponse, error) {
+	return summarizeCorosDailyActivitiesByModes(service, date, trailRunningModeList, "越野跑", "coros_daily_trail_running_summaries")
+}
+
+func summarizeCorosDailyActivitiesByModes(service coros.CorosService, date, modeList, sportName, sourceName string) (*DailySummaryResponse, error) {
 	window, err := resolveCorosDateWindow(date)
 	if err != nil {
 		return nil, err
 	}
 
-	activities, err := loadCorosActivitiesByDate(service, window)
+	activities, err := loadCorosActivitiesByDate(service, window, modeList)
 	if err != nil {
 		return nil, err
 	}
@@ -77,7 +80,7 @@ func SummarizeCorosDailyActivities(service coros.CorosService, date string) (*Da
 		summaries = append(summaries, ToResponse(*summary))
 	}
 
-	dailySummary := buildDailyAggregate(window.targetDate, activitySummaries)
+	dailySummary := buildDailyAggregate(window.targetDate, activitySummaries, sportName, sourceName)
 
 	return &DailySummaryResponse{
 		Date:          window.targetDate,
@@ -107,11 +110,73 @@ func summarizeSingleCorosActivity(service coros.CorosService, activity map[strin
 	return &summary, nil
 }
 
-func loadCorosActivitiesByDate(service coros.CorosService, window corosDateWindow) ([]map[string]interface{}, error) {
+func loadCorosActivitiesByDate(service coros.CorosService, window corosDateWindow, modeList string) ([]map[string]interface{}, error) {
 	var activities []map[string]interface{}
+	seen := make(map[string]struct{})
 
-	for page := 1; ; page++ {
-		list, err := service.ActivityList(20, page, 100)
+	for _, mode := range splitModeList(modeList) {
+		for page := 1; ; page++ {
+			list, err := service.ActivityListByModeList(20, page, mode)
+			if err != nil {
+				return nil, fmt.Errorf("获取高驰活动列表失败: %w", err)
+			}
+
+			data, ok := list["data"].(map[string]interface{})
+			if !ok {
+				return nil, fmt.Errorf("高驰活动列表缺少 data 字段")
+			}
+
+			items, ok := data["dataList"].([]interface{})
+			if !ok || len(items) == 0 {
+				break
+			}
+
+			foundOlder := false
+			for _, item := range items {
+				activity, ok := item.(map[string]interface{})
+				if !ok {
+					continue
+				}
+
+				activityDate := corosActivityDate(activity, window.location)
+				if activityDate == "" {
+					continue
+				}
+
+				switch {
+				case activityDate == window.targetDate:
+					labelID := valueAsString(findAnyValue(activity, "labelId", "id"))
+					if labelID != "" {
+						if _, exists := seen[labelID]; exists {
+							continue
+						}
+						seen[labelID] = struct{}{}
+					}
+					activities = append(activities, activity)
+				case activityDate < window.targetDate:
+					foundOlder = true
+				}
+			}
+
+			if foundOlder {
+				break
+			}
+		}
+	}
+
+	sort.Slice(activities, func(i, j int) bool {
+		return corosActivityStart(activities[i], window.location).Before(corosActivityStart(activities[j], window.location))
+	})
+
+	return activities, nil
+}
+
+func loadLatestActivitiesByModes(service coros.CorosService, modes []string) ([]map[string]interface{}, error) {
+	activities := make([]map[string]interface{}, 0, len(modes))
+	seen := make(map[string]struct{})
+
+	for _, mode := range modes {
+		list, err := service.ActivityListByModeList(20, 1, mode)
 		if err != nil {
 			return nil, fmt.Errorf("获取高驰活动列表失败: %w", err)
 		}
@@ -123,39 +188,42 @@ func loadCorosActivitiesByDate(service coros.CorosService, window corosDateWindo
 
 		items, ok := data["dataList"].([]interface{})
 		if !ok || len(items) == 0 {
-			break
+			continue
 		}
 
-		foundOlder := false
 		for _, item := range items {
 			activity, ok := item.(map[string]interface{})
 			if !ok {
 				continue
 			}
-
-			activityDate := corosActivityDate(activity, window.location)
-			if activityDate == "" {
-				continue
+			labelID := valueAsString(findAnyValue(activity, "labelId", "id"))
+			if labelID != "" {
+				if _, exists := seen[labelID]; exists {
+					continue
+				}
+				seen[labelID] = struct{}{}
 			}
-
-			switch {
-			case activityDate == window.targetDate:
-				activities = append(activities, activity)
-			case activityDate < window.targetDate:
-				foundOlder = true
-			}
-		}
-
-		if foundOlder {
-			break
+			activities = append(activities, activity)
 		}
 	}
 
 	sort.Slice(activities, func(i, j int) bool {
-		return corosActivityStart(activities[i], window.location).Before(corosActivityStart(activities[j], window.location))
+		return corosActivityStart(activities[i], nil).After(corosActivityStart(activities[j], nil))
 	})
-
 	return activities, nil
+}
+
+func splitModeList(modeList string) []string {
+	parts := strings.Split(modeList, ",")
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		out = append(out, part)
+	}
+	return out
 }
 
 func summarizeCorosDetail(latest map[string]interface{}, detail *coros.SportsSummaryResult) ActivitySummary {
@@ -269,6 +337,7 @@ func summarizeCorosDetail(latest map[string]interface{}, detail *coros.SportsSum
 		Laps:                      laps,
 		RawLatestActivity:         latest,
 	}
+	enrichTerrainMetrics(&summary)
 
 	if summary.Name == "" {
 		summary.Name = "最新高驰运动"
@@ -277,12 +346,12 @@ func summarizeCorosDetail(latest map[string]interface{}, detail *coros.SportsSum
 	return summary
 }
 
-func buildDailyAggregate(date string, activities []ActivitySummary) ActivitySummary {
+func buildDailyAggregate(date string, activities []ActivitySummary, sportName, sourceName string) ActivitySummary {
 	daily := ActivitySummary{
 		Source:     "coros",
-		SourceName: "coros_daily_running_summaries",
-		Name:       fmt.Sprintf("%s 跑步汇总", date),
-		SportType:  "跑步",
+		SourceName: sourceName,
+		Name:       fmt.Sprintf("%s %s汇总", date, sportName),
+		SportType:  sportName,
 	}
 
 	if len(activities) == 0 {
@@ -376,8 +445,26 @@ func buildDailyAggregate(date string, activities []ActivitySummary) ActivitySumm
 		daily.MaxSpeedMPS = paceToSpeed(bestPace)
 	}
 	daily.AverageStrideLengthMeters = strideLengthMeters(daily.DistanceMeters, daily.StepCount)
+	enrichTerrainMetrics(&daily)
 
 	return daily
+}
+
+func enrichTerrainMetrics(summary *ActivitySummary) {
+	if summary == nil {
+		return
+	}
+
+	if isFinitePtr(summary.AscentMeters) && isFinitePtr(summary.DistanceMeters) && *summary.DistanceMeters > 0 {
+		summary.ElevationGainPerKM = ptr(*summary.AscentMeters / (*summary.DistanceMeters / 1000))
+	}
+	if isFinitePtr(summary.AscentMeters) && isFinitePtr(summary.MovingSeconds) && *summary.MovingSeconds > 0 {
+		summary.VerticalAscentPerHour = ptr(*summary.AscentMeters / (*summary.MovingSeconds / 3600))
+		summary.TimePer100MAscentSeconds = ptr(*summary.MovingSeconds / (*summary.AscentMeters / 100))
+	}
+	if isFinitePtr(summary.MovingSeconds) && isFinitePtr(summary.DurationSeconds) && *summary.DurationSeconds > 0 {
+		summary.MovingRatio = ptr(*summary.MovingSeconds / *summary.DurationSeconds)
+	}
 }
 
 func corosTime(value *float64) *float64 {

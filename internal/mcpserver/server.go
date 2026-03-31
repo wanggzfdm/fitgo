@@ -6,6 +6,7 @@ import (
 	"coros-fit-mcp/internal/service/activitysummary"
 	"coros-fit-mcp/internal/service/coros"
 	"coros-fit-mcp/internal/service/personalmetrics"
+	"coros-fit-mcp/internal/service/traininganalysis"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -24,77 +25,45 @@ func New() *server.MCPServer {
 	)
 
 	mcpServer.AddTool(mcp.Tool{
-		Name:        "get_runner_profile",
-		Description: "获取高驰个人基础训练资料，包括身高体重、阈值心率和阈值配速。",
-		InputSchema: mcp.ToolInputSchema{
-			Type:       "object",
-			Properties: map[string]interface{}{},
-		},
-	}, handleRunnerProfile)
-
-	mcpServer.AddTool(mcp.Tool{
-		Name:        "get_training_zones",
-		Description: "获取高驰心率区间和配速区间。",
-		InputSchema: mcp.ToolInputSchema{
-			Type:       "object",
-			Properties: map[string]interface{}{},
-		},
-	}, handleTrainingZones)
-
-	mcpServer.AddTool(mcp.Tool{
-		Name:        "get_training_dashboard",
-		Description: "获取高驰训练看板，包括跑步能力、恢复、HRV 和个人纪录。",
-		InputSchema: mcp.ToolInputSchema{
-			Type:       "object",
-			Properties: map[string]interface{}{},
-		},
-	}, handleTrainingDashboard)
-
-	mcpServer.AddTool(mcp.Tool{
-		Name:        "get_training_load_status",
-		Description: "获取高驰训练负荷状态，包括 ATI、CTI、负荷比和疲劳状态。",
-		InputSchema: mcp.ToolInputSchema{
-			Type:       "object",
-			Properties: map[string]interface{}{},
-		},
-	}, handleTrainingLoadStatus)
-
-	mcpServer.AddTool(mcp.Tool{
-		Name:        "get_recent_activities",
-		Description: "获取高驰最近运动列表。",
+		Name:        "analyze_training_status",
+		Description: "分析当前或指定日期的训练状态，并给出后续 3 天训练计划。",
 		InputSchema: mcp.ToolInputSchema{
 			Type: "object",
 			Properties: map[string]interface{}{
-				"limit": map[string]interface{}{
-					"type":        "number",
-					"description": "可选，返回最近多少条活动；未传时返回全部可用活动。",
+				"date": map[string]interface{}{
+					"type":        "string",
+					"description": "可选，格式 YYYY-MM-DD；不传时分析当前状态和最新活动。",
 				},
 			},
 		},
-	}, handleRecentActivities)
+	}, handleAnalyzeTrainingStatus)
 
 	mcpServer.AddTool(mcp.Tool{
-		Name:        "get_weekly_summary",
-		Description: "获取高驰本周训练汇总。",
+		Name:        "get_training_profile",
+		Description: "聚合获取跑者基础资料、训练分区和训练看板，适合分析长期训练能力与分区设置。",
 		InputSchema: mcp.ToolInputSchema{
 			Type:       "object",
 			Properties: map[string]interface{}{},
 		},
-	}, handleWeeklySummary)
+	}, handleTrainingProfile)
 
 	mcpServer.AddTool(mcp.Tool{
-		Name:        "get_training_trends",
-		Description: "获取高驰多日训练趋势，包括负荷、VO2 Max 和跑步能力变化。",
+		Name:        "get_training_context",
+		Description: "聚合获取训练负荷、最近活动、本周汇总和趋势，适合分析近期运动状态。",
 		InputSchema: mcp.ToolInputSchema{
 			Type: "object",
 			Properties: map[string]interface{}{
+				"recent_limit": map[string]interface{}{
+					"type":        "number",
+					"description": "可选，最近活动返回条数；默认 5。",
+				},
 				"days": map[string]interface{}{
 					"type":        "number",
-					"description": "可选，返回最近多少天趋势；未传时返回全部可用趋势。",
+					"description": "可选，返回最近多少天趋势；默认 7。",
 				},
 			},
 		},
-	}, handleTrainingTrends)
+	}, handleTrainingContext)
 
 	mcpServer.AddTool(mcp.Tool{
 		Name:        "get_latest_coros_activity_summary",
@@ -107,7 +76,7 @@ func New() *server.MCPServer {
 
 	mcpServer.AddTool(mcp.Tool{
 		Name:        "get_coros_daily_running_summaries",
-		Description: "按北京时间返回某一天的跑步摘要列表；未传 date 时默认当天，返回当日汇总和每次跑步摘要。",
+		Description: "按北京时间返回某一天的跑步摘要列表；仅筛选户外跑步(100)和运动场跑步(103)；未传 date 时默认当天。",
 		InputSchema: mcp.ToolInputSchema{
 			Type: "object",
 			Properties: map[string]interface{}{
@@ -118,6 +87,20 @@ func New() *server.MCPServer {
 			},
 		},
 	}, handleDailyCorosRunningSummaries)
+
+	mcpServer.AddTool(mcp.Tool{
+		Name:        "get_coros_daily_trail_running_summaries",
+		Description: "按北京时间返回某一天的越野跑摘要列表；仅筛选越野跑(102)；未传 date 时默认当天。",
+		InputSchema: mcp.ToolInputSchema{
+			Type: "object",
+			Properties: map[string]interface{}{
+				"date": map[string]interface{}{
+					"type":        "string",
+					"description": "可选，格式 YYYY-MM-DD；未传默认北京时间当天。",
+				},
+			},
+		},
+	}, handleDailyCorosTrailRunningSummaries)
 
 	mcpServer.AddTool(mcp.Tool{
 		Name:        "summarize_fit_file",
@@ -157,27 +140,14 @@ func handleLatestCorosActivitySummary(args map[string]interface{}) (*mcp.CallToo
 	}, nil
 }
 
-func handleRunnerProfile(args map[string]interface{}) (*mcp.CallToolResult, error) {
-	profile, err := personalmetrics.GetRunnerProfile(coros.NewCorosService())
+func handleAnalyzeTrainingStatus(args map[string]interface{}) (*mcp.CallToolResult, error) {
+	date, _ := args["date"].(string)
+	analysis, err := traininganalysis.AnalyzeTrainingStatus(coros.NewCorosService(), date)
 	if err != nil {
 		return nil, err
 	}
 
-	text, err := personalmetrics.ResponseText("高驰跑者资料", profile)
-	if err != nil {
-		return nil, err
-	}
-
-	return textToolResult(text), nil
-}
-
-func handleTrainingZones(args map[string]interface{}) (*mcp.CallToolResult, error) {
-	zones, err := personalmetrics.GetTrainingZones(coros.NewCorosService())
-	if err != nil {
-		return nil, err
-	}
-
-	text, err := personalmetrics.ResponseText("高驰训练区间", zones)
+	text, err := traininganalysis.ResponseText(*analysis)
 	if err != nil {
 		return nil, err
 	}
@@ -185,27 +155,13 @@ func handleTrainingZones(args map[string]interface{}) (*mcp.CallToolResult, erro
 	return textToolResult(text), nil
 }
 
-func handleTrainingDashboard(args map[string]interface{}) (*mcp.CallToolResult, error) {
-	dashboard, err := personalmetrics.GetTrainingDashboard(coros.NewCorosService())
+func handleTrainingProfile(args map[string]interface{}) (*mcp.CallToolResult, error) {
+	bundle, err := personalmetrics.GetTrainingProfileBundle(coros.NewCorosService())
 	if err != nil {
 		return nil, err
 	}
 
-	text, err := personalmetrics.ResponseText("高驰训练看板", dashboard)
-	if err != nil {
-		return nil, err
-	}
-
-	return textToolResult(text), nil
-}
-
-func handleTrainingLoadStatus(args map[string]interface{}) (*mcp.CallToolResult, error) {
-	status, err := personalmetrics.GetTrainingLoadStatus(coros.NewCorosService())
-	if err != nil {
-		return nil, err
-	}
-
-	text, err := personalmetrics.ResponseText("高驰训练负荷状态", status)
+	text, err := personalmetrics.ResponseText("高驰训练档案", bundle)
 	if err != nil {
 		return nil, err
 	}
@@ -213,43 +169,15 @@ func handleTrainingLoadStatus(args map[string]interface{}) (*mcp.CallToolResult,
 	return textToolResult(text), nil
 }
 
-func handleRecentActivities(args map[string]interface{}) (*mcp.CallToolResult, error) {
-	limit := optionalIntArg(args, "limit")
-	activities, err := personalmetrics.GetRecentActivities(coros.NewCorosService(), limit)
+func handleTrainingContext(args map[string]interface{}) (*mcp.CallToolResult, error) {
+	recentLimit := optionalIntArgDefault(args, "recent_limit", 5)
+	trendDays := optionalIntArgDefault(args, "days", 7)
+	bundle, err := personalmetrics.GetTrainingContextBundle(coros.NewCorosService(), recentLimit, trendDays)
 	if err != nil {
 		return nil, err
 	}
 
-	text, err := personalmetrics.ResponseText("高驰最近运动", activities)
-	if err != nil {
-		return nil, err
-	}
-
-	return textToolResult(text), nil
-}
-
-func handleWeeklySummary(args map[string]interface{}) (*mcp.CallToolResult, error) {
-	summary, err := personalmetrics.GetWeeklySummary(coros.NewCorosService())
-	if err != nil {
-		return nil, err
-	}
-
-	text, err := personalmetrics.ResponseText("高驰本周训练汇总", summary)
-	if err != nil {
-		return nil, err
-	}
-
-	return textToolResult(text), nil
-}
-
-func handleTrainingTrends(args map[string]interface{}) (*mcp.CallToolResult, error) {
-	days := optionalIntArg(args, "days")
-	trends, err := personalmetrics.GetTrainingTrends(coros.NewCorosService(), days)
-	if err != nil {
-		return nil, err
-	}
-
-	text, err := personalmetrics.ResponseText("高驰训练趋势", trends)
+	text, err := personalmetrics.ResponseText("高驰近期训练状态", bundle)
 	if err != nil {
 		return nil, err
 	}
@@ -261,6 +189,29 @@ func handleDailyCorosRunningSummaries(args map[string]interface{}) (*mcp.CallToo
 	date, _ := args["date"].(string)
 
 	response, err := activitysummary.SummarizeCorosDailyActivities(coros.NewCorosService(), date)
+	if err != nil {
+		return nil, err
+	}
+
+	text, err := activitysummary.DailyResponseText(*response)
+	if err != nil {
+		return nil, err
+	}
+
+	return &mcp.CallToolResult{
+		Content: []interface{}{
+			mcp.TextContent{
+				Type: "text",
+				Text: text,
+			},
+		},
+	}, nil
+}
+
+func handleDailyCorosTrailRunningSummaries(args map[string]interface{}) (*mcp.CallToolResult, error) {
+	date, _ := args["date"].(string)
+
+	response, err := activitysummary.SummarizeCorosDailyTrailRunningActivities(coros.NewCorosService(), date)
 	if err != nil {
 		return nil, err
 	}
@@ -311,16 +262,20 @@ func textToolResult(text string) *mcp.CallToolResult {
 }
 
 func optionalIntArg(args map[string]interface{}, key string) int {
+	return optionalIntArgDefault(args, key, 0)
+}
+
+func optionalIntArgDefault(args map[string]interface{}, key string, fallback int) int {
 	raw, ok := args[key]
 	if !ok {
-		return 0
+		return fallback
 	}
 	value, ok := raw.(float64)
 	if !ok {
-		return 0
+		return fallback
 	}
 	if value <= 0 {
-		return 0
+		return fallback
 	}
 	return int(value)
 }

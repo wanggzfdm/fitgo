@@ -28,6 +28,10 @@ type ActivitySummary struct {
 	Calories                  *float64       `json:"calories,omitempty"`
 	AscentMeters              *float64       `json:"ascent_meters,omitempty"`
 	DescentMeters             *float64       `json:"descent_meters,omitempty"`
+	ElevationGainPerKM        *float64       `json:"elevation_gain_per_km,omitempty"`
+	VerticalAscentPerHour     *float64       `json:"vertical_ascent_per_hour,omitempty"`
+	TimePer100MAscentSeconds  *float64       `json:"time_per_100m_ascent_seconds,omitempty"`
+	MovingRatio               *float64       `json:"moving_ratio,omitempty"`
 	AverageHeartRate          *float64       `json:"average_heart_rate,omitempty"`
 	MaxHeartRate              *float64       `json:"max_heart_rate,omitempty"`
 	AverageCadence            *float64       `json:"average_cadence,omitempty"`

@@ -19,6 +19,9 @@ func (s *stubCorosService) SportsSummary(labelId, sportType string) (*coros.Spor
 func (s *stubCorosService) ActivityList(size, pageNumber, modeList int) (map[string]interface{}, error) {
 	return nil, nil
 }
+func (s *stubCorosService) ActivityListByModeList(size, pageNumber int, modeList string) (map[string]interface{}, error) {
+	return nil, nil
+}
 func (s *stubCorosService) AccountQuery() (*coros.AccountQueryData, error) {
 	return s.accountData, nil
 }
@@ -284,5 +287,32 @@ func TestGetTrainingTrends(t *testing.T) {
 	}
 	if trends[1].ATI == nil || *trends[1].ATI != 67 {
 		t.Fatalf("expected ATI to be preserved, got %#v", trends[1].ATI)
+	}
+}
+
+func TestGetTrainingContextBundleKeepsPartialData(t *testing.T) {
+	service := &stubCorosService{
+		accountData: &coros.AccountQueryData{
+			Weight: 70,
+		},
+		dashboardDetailData: &coros.DashboardDetailQueryData{
+			SummaryInfo: coros.DashboardDetailSummaryInfo{
+				ATI: 67,
+			},
+			CurrentWeekRecord: coros.WeekRecord{
+				DistanceRecord: coros.AggregateRecord{TotalValue: 18426.2},
+			},
+		},
+	}
+
+	bundle, err := GetTrainingContextBundle(service, 5, 7)
+	if err != nil {
+		t.Fatalf("GetTrainingContextBundle returned error: %v", err)
+	}
+	if len(bundle.Available) == 0 {
+		t.Fatalf("expected available sections, got %#v", bundle)
+	}
+	if bundle.TrainingLoadStatus == nil {
+		t.Fatalf("expected training load status, got %#v", bundle)
 	}
 }
